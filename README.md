@@ -13,7 +13,7 @@
 ### 快速安装
 ```bash
 # 克隆仓库
-git clone https://github.com/yourname/redis_scan.git
+git clone https://github.com/ivehu/redis_scan.git
 cd redis_scan
 
 # 构建项目
