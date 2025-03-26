@@ -122,6 +122,18 @@ func findBigKeys() {
 		count int64
 	}
 
+	// 新增类型统计结构
+	typeStats := map[string]struct {
+		count int   // 类型key总数
+		total int64 // 类型总大小
+	}{
+		"string": {0, 0},
+		"list":   {0, 0},
+		"hash":   {0, 0},
+		"set":    {0, 0},
+		"zset":   {0, 0},
+	}
+
 	// 修改为存储前5大key的slice
 	biggest := map[string][]KeyStat{
 		"string": make([]KeyStat, 0),
@@ -132,12 +144,16 @@ func findBigKeys() {
 	}
 
 	cursor := uint64(0)
+	totalKeys := 0 // 新增总key计数器
+
 	for {
 		keys, newCursor, err := rdb.Scan(ctx, cursor, "*", 1000).Result()
 		if err != nil {
 			fmt.Println("Scan error:", err)
 			break
 		}
+
+		totalKeys += len(keys) // 统计总key数
 
 		for _, key := range keys {
 			// Get key type and size based on type
@@ -171,11 +187,35 @@ func findBigKeys() {
 				}
 				biggest[keyType] = stats
 			}
+
+			// 新增统计计数
+			if stat, exists := typeStats[keyType]; exists {
+				stat.count++
+				stat.total += count
+				typeStats[keyType] = stat
+			}
 		}
 
 		if cursor = newCursor; cursor == 0 {
 			break
 		}
+	}
+
+	// 新增统计信息输出
+	fmt.Printf("\nKey Type Statistics (%d total keys):\n", totalKeys)
+	for t, s := range typeStats {
+		if s.count == 0 {
+			continue
+		}
+		avg := float64(s.total) / float64(s.count)
+		pct := float64(s.count) / float64(totalKeys) * 100
+		fmt.Printf("%-6s %d keys with %d %s (%.2f%%, avg size %.2f)\n",
+			strings.Title(t)+"s:",
+			s.count,
+			s.total,
+			getUnit(t),
+			pct,
+			avg)
 	}
 
 	// 输出结果（修改为遍历前10）
@@ -201,6 +241,20 @@ func findBigKeys() {
 				stat.count,
 				unit)
 		}
+	}
+}
+
+// 新增辅助函数
+func getUnit(t string) string {
+	switch t {
+	case "string":
+		return "bytes"
+	case "list":
+		return "items"
+	case "hash":
+		return "fields"
+	default: // set/zset
+		return "members"
 	}
 }
 
